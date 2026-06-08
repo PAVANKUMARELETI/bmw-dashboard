@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BMW Waste Management — Live Master Dashboard</title>
+<style>
+  :root {
+    --bg: #0A0A14;
+    --panel: #111120;
+    --border: #1E1E3A;
+    --text: #C8C8E0;
+    --muted: #555577;
+    --red: #E53935; --red-bg: #1E0808;
+    --yellow: #FDD835; --yellow-bg: #1A1800;
+    --blue: #1E88E5; --blue-bg: #080E1E;
+    --white-cat: #BDBDBD; --white-bg: #141414;
+    --green: #4CAF50; --green-bg: #081408;
+    --orange: #FF8F00; --orange-bg: #1A0E00;
+    --purple: #CE93D8; --purple-bg: #160A1E;
+    --teal: #4DB6AC;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter','Segoe UI',sans-serif; font-size: 12px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── HEADER ── */
+  .header {
+    background: #0D0D1F;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(76,175,80,.6)} 50%{box-shadow:0 0 0 6px rgba(76,175,80,0)} }
+  .header h1 { font-size: 15px; font-weight: 700; color: #fff; }
+  .header-sub { font-size: 10px; color: var(--muted); }
+  .clock { font-size: 13px; font-weight: 700; color: var(--teal); font-variant-numeric: tabular-nums; }
+  .header-right { display: flex; gap: 20px; align-items: center; }
+
+  /* ── GLOBAL KPI BAR ── */
+  .kpi-bar {
+    background: #0D0D1F;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 20px;
+    display: flex;
+    gap: 0;
+    flex-shrink: 0;
+  }
+  .kpi { flex: 1; text-align: center; border-right: 1px solid var(--border); padding: 0 12px; }
+  .kpi:last-child { border-right: none; }
+  .kpi-val { font-size: 18px; font-weight: 700; color: #fff; }
+  .kpi-lbl { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+  /* ── PIPELINE FLOW ── */
+  .pipeline {
+    background: #0D0D1F;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+  }
+  .pipe-stage { display: flex; align-items: center; gap: 6px; flex: 1; }
+  .pipe-box {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    text-align: center;
+    position: relative;
+  }
+  .pipe-box.active { border-color: var(--orange); background: #110C00; }
+  .pipe-box.done { border-color: #2E7D32; background: var(--green-bg); }
+  .pipe-num { font-size: 9px; color: var(--muted); }
+  .pipe-name { font-size: 11px; font-weight: 700; color: #fff; }
+  .pipe-count { font-size: 10px; font-weight: 700; }
+  .pipe-arrow { color: var(--muted); font-size: 16px; flex-shrink: 0; padding: 0 4px; }
+  .pipe-count.done { color: var(--green); }
+  .pipe-count.active { color: var(--orange); }
+  .pipe-count.pending { color: var(--muted); }
+
+  /* ── MAIN GRID ── */
+  .main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+    padding: 8px 12px;
+    overflow: hidden;
+  }
+
+  /* Stage panels */
+  .stage-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .stage-panel.done { border-color: #1B3A1B; }
+  .stage-panel.active { border-color: var(--orange); box-shadow: 0 0 12px rgba(255,143,0,.12); }
+
+  .stage-header {
+    padding: 7px 12px 5px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .stage-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .stage-name { font-size: 12px; font-weight: 700; color: #fff; }
+  .stage-status { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+  .s-done { background: #1B3A1B; color: var(--green); }
+  .s-active { background: #2A1800; color: var(--orange); animation: blink-text 2s infinite; }
+  .s-pending { background: #1A1A2E; color: var(--muted); }
+  @keyframes blink-text { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+  .stage-body { flex: 1; padding: 8px 10px; overflow: hidden; display: flex; flex-direction: column; gap: 6px; }
+
+  /* Cat pills row */
+  .cat-row { display: flex; gap: 4px; }
+  .cat-pill { flex: 1; border-radius: 5px; padding: 4px 4px 3px; text-align: center; border: 1px solid; }
+  .cat-pill .cp-val { font-size: 14px; font-weight: 700; line-height: 1; }
+  .cat-pill .cp-lbl { font-size: 9px; margin-top: 1px; }
+  .cp-r { background: var(--red-bg); border-color: #3A1010; color: var(--red); }
+  .cp-y { background: var(--yellow-bg); border-color: #2A2000; color: var(--yellow); }
+  .cp-b { background: var(--blue-bg); border-color: #0D1F35; color: var(--blue); }
+  .cp-w { background: var(--white-bg); border-color: #252525; color: var(--white-cat); }
+
+  /* Mini stat row */
+  .mini-stats { display: flex; gap: 6px; }
+  .mini-stat { flex: 1; background: #0A0A18; border-radius: 4px; padding: 4px 6px; }
+  .ms-val { font-size: 13px; font-weight: 700; color: #fff; }
+  .ms-lbl { font-size: 9px; color: var(--muted); }
+
+  /* Progress bar */
+  .mini-prog { background: #1A1A2E; border-radius: 3px; height: 6px; overflow: hidden; margin: 2px 0; }
+  .mini-prog-fill { height: 100%; border-radius: 3px; }
+
+  /* Alert badge */
+  .alert-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .a-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+  .a-ok { background: #1B3A1B; color: var(--green); }
+  .a-warn { background: #2A1800; color: var(--orange); }
+  .a-danger { background: var(--red-bg); color: var(--red); }
+  .a-info { background: #0D1F35; color: var(--blue); }
+
+  /* Small label */
+  .mini-label { font-size: 9px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .8px; }
+
+  /* ── BOTTOM ROW: Alerts + Activity ── */
+  .alerts-panel {
+    grid-column: 1 / 4;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .activity-panel {
+    grid-column: 4 / 6;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .alerts-body { flex: 1; overflow-y: auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .alert-item { display: flex; gap: 8px; align-items: flex-start; padding: 5px 8px; border-radius: 5px; border-left: 3px solid; }
+  .alert-item.ok { background: var(--green-bg); border-color: var(--green); }
+  .alert-item.warn { background: var(--orange-bg); border-color: var(--orange); }
+  .alert-item.danger { background: var(--red-bg); border-color: var(--red); }
+  .alert-item.info { background: var(--blue-bg); border-color: var(--blue); }
+  .alert-stage { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,.06); white-space: nowrap; }
+  .alert-msg { font-size: 11px; color: #CCCCDD; flex: 1; }
+  .alert-time { font-size: 9px; color: var(--muted); white-space: nowrap; }
+
+  .activity-body { flex: 1; overflow-y: auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 3px; }
+  .act-item { display: flex; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 4px; }
+  .act-item:hover { background: rgba(255,255,255,.03); }
+  .act-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .act-text { flex: 1; font-size: 11px; }
+  .act-time { font-size: 9px; color: var(--muted); white-space: nowrap; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #2A2A44; border-radius: 4px; }
+
+  /* Route mini-bar */
+  .route-bar { position: relative; height: 8px; background: #1A1A2E; border-radius: 4px; margin: 3px 0; overflow: visible; }
+  .route-progress { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--green), var(--orange)); }
+  .route-vehicle { position: absolute; top: -4px; width: 14px; height: 14px; background: var(--orange); border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 6px var(--orange); transform: translateX(-50%); transition: left 1s; }
+
+  /* Compliance bar */
+  .comp-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 3px 0; gap: 1px; }
+  .comp-ok { background: var(--green); }
+  .comp-br { background: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="live-dot"></div>
+    <div>
+      <div class="header h1" style="font-size:15px;font-weight:700;color:#fff;">BMW Biomedical Waste Management — Live Monitor</div>
+      <div class="header-sub">Full chain: Central Storage → Pickup → Route → Unloading → Treatment (CBWTF)</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div style="text-align:right;">
+      <div class="clock" id="clock">--:--:--</div>
+      <div style="font-size:9px;color:var(--muted);" id="datestr">Loading...</div>
+    </div>
+    <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;color:var(--green);">● LIVE</div>
+  </div>
+</div>
+
+<!-- GLOBAL KPI BAR -->
+<div class="kpi-bar">
+  <div class="kpi">
+    <div class="kpi-val" style="color:var(--teal)" id="kpi-total">—</div>
+    <div class="kpi-lbl">Total Bags in System</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-val" style="color:var(--green)" id="kpi-treated">—</div>
+    <div class="kpi-lbl">Bags Treated Today</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-val" style="color:var(--orange)" id="kpi-intransit">—</div>
+    <div class="kpi-lbl">In Transit</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-val" style="color:var(--red)" id="kpi-alerts">—</div>
+    <div class="kpi-lbl">Active Alerts</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-val" id="kpi-compliance">—%</div>
+    <div class="kpi-lbl">48hr Compliance</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-val" style="color:var(--purple)" id="kpi-weight">—</div>
+    <div class="kpi-lbl">Total Weight (kg)</div>
+  </div>
+</div>
+
+<!-- PIPELINE FLOW -->
+<div class="pipeline">
+  <div class="pipe-stage">
+    <div class="pipe-box done">
+      <div class="pipe-num">Stage 1</div>
+      <div class="pipe-name">Central Storage</div>
+      <div class="pipe-count done" id="p1-count">— bags</div>
+    </div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-stage">
+    <div class="pipe-box done">
+      <div class="pipe-num">Stage 2</div>
+      <div class="pipe-name">BMW Pickup</div>
+      <div class="pipe-count done" id="p2-count">— bags</div>
+    </div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-stage">
+    <div class="pipe-box active">
+      <div class="pipe-num">Stage 3</div>
+      <div class="pipe-name">Route Now</div>
+      <div class="pipe-count active" id="p3-count">— bags</div>
+    </div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-stage">
+    <div class="pipe-box done">
+      <div class="pipe-num">Stage 4</div>
+      <div class="pipe-name">Unloading</div>
+      <div class="pipe-count done" id="p4-count">— bags</div>
+    </div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-stage">
+    <div class="pipe-box active">
+      <div class="pipe-num">Stage 5</div>
+      <div class="pipe-name">Treatment</div>
+      <div class="pipe-count active" id="p5-count">— bags</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main">
+
+  <!-- S1: Central Storage -->
+  <div class="stage-panel done">
+    <div class="stage-header">
+      <div>
+        <div class="stage-label" style="color:var(--teal);">Stage 1</div>
+        <div class="stage-name">Central Storage</div>
+      </div>
+      <div class="stage-status s-done">✅ Active</div>
+    </div>
+    <div class="stage-body">
+      <div class="mini-label">Bags in Storage</div>
+      <div class="cat-row">
+        <div class="cat-pill cp-r"><div class="cp-val" id="s1-r">—</div><div class="cp-lbl">Red</div></div>
+        <div class="cat-pill cp-y"><div class="cp-val" id="s1-y">—</div><div class="cp-lbl">Yellow</div></div>
+        <div class="cat-pill cp-b"><div class="cp-val" id="s1-b">—</div><div class="cp-lbl">Blue</div></div>
+        <div class="cat-pill cp-w"><div class="cp-val" id="s1-w">—</div><div class="cp-lbl">White</div></div>
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="ms-val" id="s1-weight">—</div><div class="ms-lbl">kg total</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s1-scans">—</div><div class="ms-lbl">Scanned</div></div>
+      </div>
+      <div>
+        <div class="mini-label">Storage Capacity</div>
+        <div class="mini-prog"><div class="mini-prog-fill" id="s1-cap-bar" style="width:42%;background:var(--teal);"></div></div>
+        <div style="font-size:9px;color:var(--muted);" id="s1-cap-txt">42% used</div>
+      </div>
+      <div class="alert-row">
+        <div class="a-badge a-ok">First Scan: ✓</div>
+        <div class="a-badge a-info" id="s1-48hr">48hr: — bags due</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S2: BMW Pickup -->
+  <div class="stage-panel done">
+    <div class="stage-header">
+      <div>
+        <div class="stage-label" style="color:var(--orange);">Stage 2</div>
+        <div class="stage-name">BMW Pickup</div>
+      </div>
+      <div class="stage-status s-done">✅ Active</div>
+    </div>
+    <div class="stage-body">
+      <div class="mini-label">Picked Up Today</div>
+      <div class="cat-row">
+        <div class="cat-pill cp-r"><div class="cp-val" id="s2-r">—</div><div class="cp-lbl">R</div></div>
+        <div class="cat-pill cp-y"><div class="cp-val" id="s2-y">—</div><div class="cp-lbl">Y</div></div>
+        <div class="cat-pill cp-b"><div class="cp-val" id="s2-b">—</div><div class="cp-lbl">B</div></div>
+        <div class="cat-pill cp-w"><div class="cp-val" id="s2-w">—</div><div class="cp-lbl">W</div></div>
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="ms-val" id="s2-vehicles">—</div><div class="ms-lbl">Vehicles</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s2-weight">—</div><div class="ms-lbl">kg loaded</div></div>
+      </div>
+      <div>
+        <div class="mini-label">48hr Compliance</div>
+        <div class="comp-bar">
+          <div class="comp-ok" id="s2-comp-ok" style="flex:8;"></div>
+          <div class="comp-br" id="s2-comp-br" style="flex:2;"></div>
+        </div>
+        <div style="font-size:9px;display:flex;justify-content:space-between;color:var(--muted);">
+          <span style="color:var(--green);" id="s2-ontime">On Time: —</span>
+          <span style="color:var(--red);" id="s2-breach">Breached: —</span>
+        </div>
+      </div>
+      <div class="alert-row">
+        <div class="a-badge a-ok">2nd Scan: ✓</div>
+        <div class="a-badge" id="s2-alert" style="background:var(--green-bg);color:var(--green);">No Alerts</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3: Route Now -->
+  <div class="stage-panel active">
+    <div class="stage-header">
+      <div>
+        <div class="stage-label" style="color:var(--blue);">Stage 3</div>
+        <div class="stage-name">Route Now</div>
+      </div>
+      <div class="stage-status s-active">🚛 Live</div>
+    </div>
+    <div class="stage-body">
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="ms-val" id="s3-vehicles">—</div><div class="ms-lbl">En Route</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s3-eta">—</div><div class="ms-lbl">Min ETA</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s3-bags">—</div><div class="ms-lbl">Bags</div></div>
+      </div>
+      <div>
+        <div class="mini-label">VEH-002 Route Progress</div>
+        <div class="route-bar">
+          <div class="route-progress" id="s3-bar" style="width:62%;"></div>
+          <div class="route-vehicle" id="s3-vehicle-dot" style="left:62%;"></div>
+        </div>
+        <div style="font-size:9px;color:var(--muted);display:flex;justify-content:space-between;">
+          <span style="color:var(--green);">🟢 Storage</span>
+          <span id="s3-pct" style="color:var(--orange);">62%</span>
+          <span style="color:var(--red);">🔴 CBWTF</span>
+        </div>
+      </div>
+      <div class="alert-row">
+        <div class="a-badge" id="s3-dev" style="background:var(--green-bg);color:var(--green);">No Deviation</div>
+        <div class="a-badge" id="s3-stop" style="background:var(--green-bg);color:var(--green);">No Stop</div>
+        <div class="a-badge a-info" id="s3-gps">GPS ✓</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S4: Unloading -->
+  <div class="stage-panel done">
+    <div class="stage-header">
+      <div>
+        <div class="stage-label" style="color:var(--purple);">Stage 4</div>
+        <div class="stage-name">Unloading</div>
+      </div>
+      <div class="stage-status s-done">✅ Active</div>
+    </div>
+    <div class="stage-body">
+      <div class="mini-label">Unloaded Today</div>
+      <div class="cat-row">
+        <div class="cat-pill cp-r"><div class="cp-val" id="s4-r">—</div><div class="cp-lbl">R</div></div>
+        <div class="cat-pill cp-y"><div class="cp-val" id="s4-y">—</div><div class="cp-lbl">Y</div></div>
+        <div class="cat-pill cp-b"><div class="cp-val" id="s4-b">—</div><div class="cp-lbl">B</div></div>
+        <div class="cat-pill cp-w"><div class="cp-val" id="s4-w">—</div><div class="cp-lbl">W</div></div>
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="ms-val" id="s4-ok" style="color:var(--green);">—</div><div class="ms-lbl">Bags OK</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s4-dmg" style="color:var(--orange);">—</div><div class="ms-lbl">Damaged</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s4-leak" style="color:var(--red);">—</div><div class="ms-lbl">Leaking</div></div>
+      </div>
+      <div class="alert-row">
+        <div class="a-badge a-ok">3rd Scan: ✓</div>
+        <div class="a-badge" id="s4-spill" style="background:var(--green-bg);color:var(--green);">No Spill</div>
+        <div class="a-badge a-ok" id="s4-disc">No Discrepancy</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- S5: Treatment -->
+  <div class="stage-panel active">
+    <div class="stage-header">
+      <div>
+        <div class="stage-label" style="color:var(--green);">Stage 5</div>
+        <div class="stage-name">Treatment (CBWTF)</div>
+      </div>
+      <div class="stage-status s-active">⚗️ Live</div>
+    </div>
+    <div class="stage-body">
+      <!-- Incinerator status -->
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#110800;border:1px solid #3A2000;border-radius:5px;padding:5px 8px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div id="s5-inc-dot" style="width:9px;height:9px;border-radius:50%;background:var(--orange);animation:pulse 1.2s infinite;"></div>
+          <span style="font-size:11px;font-weight:700;color:var(--orange);" id="s5-inc-status">🔥 Incinerator ON</span>
+        </div>
+        <span style="font-size:9px;color:var(--muted);" id="s5-inc-meter">MTR-01</span>
+      </div>
+      <div class="mini-stats">
+        <div class="mini-stat"><div class="ms-val" id="s5-kwh" style="color:var(--yellow);">—</div><div class="ms-lbl">kWh today</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s5-runtime" style="color:var(--orange);">—</div><div class="ms-lbl">Run (min)</div></div>
+        <div class="mini-stat"><div class="ms-val" id="s5-treated">—</div><div class="ms-lbl">Treated</div></div>
+      </div>
+      <div>
+        <div class="mini-label">Primary (R+Y) — Incineration</div>
+        <div class="mini-prog"><div class="mini-prog-fill" id="s5-pri-bar" style="width:65%;background:var(--orange);"></div></div>
+        <div class="mini-label" style="margin-top:3px;">Secondary (B+W) — Autoclave/Chemical</div>
+        <div class="mini-prog"><div class="mini-prog-fill" id="s5-sec-bar" style="width:80%;background:var(--blue);"></div></div>
+      </div>
+      <div class="alert-row">
+        <div class="a-badge a-info" id="s5-con">CON-—</div>
+        <div class="a-badge" id="s5-pending-badge" style="background:#2A1800;color:var(--orange);">Pending: —</div>
+        <div class="a-badge" id="s5-sub" style="background:var(--green-bg);color:var(--green);">Comply ✓</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM LEFT: Alerts -->
+  <div class="alerts-panel">
+    <div class="panel-header">
+      <span>⚠ Live Alerts</span>
+      <span id="alert-count" style="color:var(--red);">— active</span>
+    </div>
+    <div class="alerts-body" id="alerts-list">
+      <div class="alert-item ok">
+        <span class="alert-stage" style="color:var(--green);">S1</span>
+        <span class="alert-msg">System initializing — awaiting live data feed</span>
+        <span class="alert-time">--:--</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM RIGHT: Activity Log -->
+  <div class="activity-panel">
+    <div class="panel-header">
+      <span>📋 Activity Log</span>
+      <span style="color:var(--teal);">Live</span>
+    </div>
+    <div class="activity-body" id="activity-list">
+      <div class="act-item">
+        <div class="act-dot" style="background:var(--muted);"></div>
+        <div class="act-text" style="color:var(--muted);">Waiting for live data...</div>
+        <div class="act-time">--:--</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── CLOCK ──
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-IN', {hour12:false});
+  document.getElementById('datestr').textContent = now.toLocaleDateString('en-IN', {weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── SIMULATED LIVE DATA ──
+// Replace these with real API/WebSocket calls when backend is ready
+const state = {
+  // Stage 1
+  s1: { r: 24, y: 18, b: 31, w: 12, weight: 194.6, scans: 85, cap: 42, due48: 3 },
+  // Stage 2
+  s2: { r: 20, y: 15, b: 27, w: 10, vehicles: 3, weight: 178.4, ontime: 68, breach: 4 },
+  // Stage 3
+  s3: { vehicles: 2, eta: 18, bags: 45, pct: 62, deviation: false, stopped: false },
+  // Stage 4
+  s4: { r: 18, y: 12, b: 22, w: 9, ok: 57, dmg: 3, leak: 1, spill: false, disc: 0 },
+  // Stage 5
+  s5: { treated: 48, pending: 13, pri: 65, sec: 80, batches: 3, comply: 3, con: '0043', sub: true,
+        incOn: true, meterId: 'MTR-01', kwh: 42.6, runtime: 94 },
+};
+
+function computeGlobals() {
+  const totalBags = state.s1.r + state.s1.y + state.s1.b + state.s1.w;
+  const treated   = state.s5.treated;
+  const inTransit = state.s3.bags;
+  const alerts    = (state.s2.breach > 0 ? 1 : 0) + (state.s4.spill ? 1 : 0) + (state.s3.deviation ? 1 : 0) + (state.s3.stopped ? 1 : 0);
+  const comp      = Math.round(state.s2.ontime / (state.s2.ontime + state.s2.breach) * 100);
+  const weight    = (state.s1.weight + state.s2.weight).toFixed(1);
+  return { totalBags, treated, inTransit, alerts, comp, weight };
+}
+
+function render() {
+  const g = computeGlobals();
+
+  // Global KPIs
+  document.getElementById('kpi-total').textContent      = g.totalBags;
+  document.getElementById('kpi-treated').textContent    = g.treated;
+  document.getElementById('kpi-intransit').textContent  = g.inTransit;
+  document.getElementById('kpi-alerts').textContent     = g.alerts;
+  document.getElementById('kpi-compliance').textContent = g.comp + '%';
+  document.getElementById('kpi-weight').textContent     = g.weight + ' kg';
+
+  // Pipeline counts
+  document.getElementById('p1-count').textContent = (state.s1.r+state.s1.y+state.s1.b+state.s1.w) + ' bags';
+  document.getElementById('p2-count').textContent = (state.s2.r+state.s2.y+state.s2.b+state.s2.w) + ' bags';
+  document.getElementById('p3-count').textContent = state.s3.bags + ' bags';
+  document.getElementById('p4-count').textContent = (state.s4.r+state.s4.y+state.s4.b+state.s4.w) + ' bags';
+  document.getElementById('p5-count').textContent = state.s5.treated + ' bags';
+
+  // Stage 1
+  document.getElementById('s1-r').textContent      = state.s1.r;
+  document.getElementById('s1-y').textContent      = state.s1.y;
+  document.getElementById('s1-b').textContent      = state.s1.b;
+  document.getElementById('s1-w').textContent      = state.s1.w;
+  document.getElementById('s1-weight').textContent = state.s1.weight + ' kg';
+  document.getElementById('s1-scans').textContent  = state.s1.scans;
+  document.getElementById('s1-cap-bar').style.width = state.s1.cap + '%';
+  document.getElementById('s1-cap-txt').textContent = state.s1.cap + '% capacity used';
+  document.getElementById('s1-48hr').textContent    = '48hr: ' + state.s1.due48 + ' bags due';
+
+  // Stage 2
+  document.getElementById('s2-r').textContent      = state.s2.r;
+  document.getElementById('s2-y').textContent      = state.s2.y;
+  document.getElementById('s2-b').textContent      = state.s2.b;
+  document.getElementById('s2-w').textContent      = state.s2.w;
+  document.getElementById('s2-vehicles').textContent = state.s2.vehicles;
+  document.getElementById('s2-weight').textContent = state.s2.weight;
+  document.getElementById('s2-comp-ok').style.flex  = state.s2.ontime;
+  document.getElementById('s2-comp-br').style.flex  = state.s2.breach;
+  document.getElementById('s2-ontime').textContent  = 'On Time: ' + state.s2.ontime;
+  document.getElementById('s2-breach').textContent  = 'Breached: ' + state.s2.breach;
+  const s2alert = document.getElementById('s2-alert');
+  if (state.s2.breach > 0) {
+    s2alert.textContent = '⚠ ' + state.s2.breach + ' breached';
+    s2alert.style.background = '#2A1800'; s2alert.style.color = 'var(--orange)';
+  } else {
+    s2alert.textContent = 'No Alerts'; s2alert.style.background = 'var(--green-bg)'; s2alert.style.color = 'var(--green)';
+  }
+
+  // Stage 3
+  document.getElementById('s3-vehicles').textContent = state.s3.vehicles;
+  document.getElementById('s3-eta').textContent      = state.s3.eta + ' min';
+  document.getElementById('s3-bags').textContent     = state.s3.bags;
+  document.getElementById('s3-bar').style.width      = state.s3.pct + '%';
+  document.getElementById('s3-vehicle-dot').style.left = state.s3.pct + '%';
+  document.getElementById('s3-pct').textContent      = state.s3.pct + '%';
+  const devEl = document.getElementById('s3-dev');
+  devEl.textContent = state.s3.deviation ? '⚠ Deviation!' : 'No Deviation';
+  devEl.style.background = state.s3.deviation ? '#2A1800' : 'var(--green-bg)';
+  devEl.style.color = state.s3.deviation ? 'var(--orange)' : 'var(--green)';
+  const stopEl = document.getElementById('s3-stop');
+  stopEl.textContent = state.s3.stopped ? '⚠ Stopped!' : 'No Stop';
+  stopEl.style.background = state.s3.stopped ? 'var(--red-bg)' : 'var(--green-bg)';
+  stopEl.style.color = state.s3.stopped ? 'var(--red)' : 'var(--green)';
+
+  // Stage 4
+  document.getElementById('s4-r').textContent    = state.s4.r;
+  document.getElementById('s4-y').textContent    = state.s4.y;
+  document.getElementById('s4-b').textContent    = state.s4.b;
+  document.getElementById('s4-w').textContent    = state.s4.w;
+  document.getElementById('s4-ok').textContent   = state.s4.ok;
+  document.getElementById('s4-dmg').textContent  = state.s4.dmg;
+  document.getElementById('s4-leak').textContent = state.s4.leak;
+  const spillEl = document.getElementById('s4-spill');
+  spillEl.textContent = state.s4.spill ? '🚨 SPILL!' : 'No Spill';
+  spillEl.style.background = state.s4.spill ? 'var(--red-bg)' : 'var(--green-bg)';
+  spillEl.style.color = state.s4.spill ? 'var(--red)' : 'var(--green)';
+
+  // Stage 5 — with smart energy meter
+  const incDot    = document.getElementById('s5-inc-dot');
+  const incStatus = document.getElementById('s5-inc-status');
+  if (state.s5.incOn) {
+    incDot.style.background = 'var(--orange)';
+    incDot.style.animation  = 'pulse 1.2s infinite';
+    incStatus.textContent   = '🔥 Incinerator ON';
+    incStatus.style.color   = 'var(--orange)';
+  } else {
+    incDot.style.background = 'var(--muted)';
+    incDot.style.animation  = 'none';
+    incStatus.textContent   = '⭘  Incinerator OFF';
+    incStatus.style.color   = 'var(--muted)';
+  }
+  document.getElementById('s5-inc-meter').textContent     = state.s5.meterId;
+  document.getElementById('s5-kwh').textContent           = state.s5.kwh.toFixed(1) + ' kWh';
+  document.getElementById('s5-runtime').textContent       = state.s5.runtime + ' min';
+  document.getElementById('s5-treated').textContent       = state.s5.treated;
+  document.getElementById('s5-pri-bar').style.width       = state.s5.pri + '%';
+  document.getElementById('s5-sec-bar').style.width       = state.s5.sec + '%';
+  document.getElementById('s5-con').textContent           = 'CON-' + state.s5.con;
+  document.getElementById('s5-pending-badge').textContent = 'Pending: ' + state.s5.pending;
+
+  // Alert count
+  document.getElementById('alert-count').textContent = g.alerts + ' active';
+}
+
+// ── ALERTS FEED ──
+const alertsData = [
+  { type:'ok',     stage:'S1', msg:'First scan session started — HCF-001 City Hospital', time:'09:14' },
+  { type:'info',   stage:'S2', msg:'VEH-002 dispatched — 45 bags, 62.1 kg', time:'09:52' },
+  { type:'warn',   stage:'S2', msg:'BMW-00099 exceeded 48hr threshold — immediate pickup required', time:'09:55' },
+  { type:'info',   stage:'S3', msg:'VEH-002 en route — ETA 18 min to CBWTF', time:'10:02' },
+  { type:'ok',     stage:'S4', msg:'Unloading complete — VEH-003: 42 bags, 58.3 kg received', time:'10:15' },
+  { type:'danger', stage:'S4', msg:'Spill detected — BMW-00099 (R-Red) — unloading paused', time:'10:01' },
+  { type:'ok',     stage:'S4', msg:'Spill resolved — unloading resumed', time:'10:04' },
+  { type:'ok',     stage:'S5', msg:'Batch B completed — GPS-CON-0042 (B+W) treatment done', time:'10:30' },
+  { type:'warn',   stage:'S5', msg:'Batch A in progress — GPS-CON-0041 primary treatment ongoing', time:'10:35' },
+];
+
+function buildAlerts() {
+  const list = document.getElementById('alerts-list');
+  list.innerHTML = alertsData.slice().reverse().map(a =>
+    `<div class="alert-item ${a.type}">
+      <span class="alert-stage" style="color:${a.type==='ok'?'var(--green)':a.type==='danger'?'var(--red)':a.type==='warn'?'var(--orange)':'var(--blue)'};">${a.stage}</span>
+      <span class="alert-msg">${a.msg}</span>
+      <span class="alert-time">${a.time}</span>
+    </div>`
+  ).join('');
+}
+
+// ── ACTIVITY FEED ──
+const activityData = [
+  { color:'var(--teal)',   text:'BMW-00128 First Scan logged — R-Red, 2.7 kg, HCF-002', time:'10:38' },
+  { color:'var(--green)',  text:'VEH-003 pickup confirmed — 42 bags loaded, 58.3 kg', time:'10:32' },
+  { color:'var(--green)',  text:'GPS-CON-0042 treatment complete — compliance record generated', time:'10:30' },
+  { color:'var(--orange)', text:'VEH-002 dispatched — predefined route assigned', time:'10:20' },
+  { color:'var(--red)',    text:'Spill resolved — unloading resumed (BMW-00099)', time:'10:04' },
+  { color:'var(--red)',    text:'Spill alert — BMW-00099 leaking (R-Red) at CBWTF', time:'10:01' },
+  { color:'var(--blue)',   text:'VEH-003 arrived CBWTF — route complete in 75 min', time:'09:58' },
+  { color:'var(--orange)', text:'48hr breach — BMW-00099 stored 10:00 Jun 6, overdue', time:'09:55' },
+  { color:'var(--teal)',   text:'BMW-00127 First Scan — W-White, 0.9 kg, HCF-003', time:'09:18' },
+  { color:'var(--teal)',   text:'BMW-00124 First Scan — R-Red, 2.4 kg, HCF-001', time:'09:14' },
+];
+
+function buildActivity() {
+  const list = document.getElementById('activity-list');
+  list.innerHTML = activityData.map(a =>
+    `<div class="act-item">
+      <div class="act-dot" style="background:${a.color};"></div>
+      <div class="act-text">${a.text}</div>
+      <div class="act-time">${a.time}</div>
+    </div>`
+  ).join('');
+}
+
+// ── LIVE SIMULATION ──
+// Simulates data changing over time to demonstrate live monitoring
+// Replace with real WebSocket/API integration
+let tick = 0;
+function simulateLive() {
+  tick++;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});
+
+  // Simulate route progress
+  state.s3.pct = Math.min(98, state.s3.pct + 0.8);
+  state.s3.eta = Math.max(1, Math.round((100 - state.s3.pct) * 0.28));
+
+  // Simulate occasional new scans at S1
+  if (tick % 8 === 0) {
+    const cats = ['r','y','b','w'];
+    const cat = cats[Math.floor(Math.random()*4)];
+    state.s1[cat]++;
+    state.s1.scans++;
+    state.s1.weight = +(state.s1.weight + (Math.random()*2+0.5)).toFixed(1);
+    const catName = {r:'R-Red',y:'Y-Yellow',b:'B-Blue',w:'W-White'}[cat];
+    const bagId = 'BMW-' + String(200 + tick).padStart(5,'0');
+    activityData.unshift({ color:'var(--teal)', text:`${bagId} First Scan — ${catName}, ${(Math.random()*2+0.5).toFixed(1)} kg`, time: timeStr });
+    activityData.splice(12);
+    buildActivity();
+  }
+
+  // Simulate treatment progress + energy meter
+  if (tick % 12 === 0 && state.s5.pending > 0) {
+    state.s5.treated++;
+    state.s5.pending--;
+    state.s5.pri = Math.min(100, state.s5.pri + 2);
+    state.s5.sec = Math.min(100, state.s5.sec + 1.5);
+  }
+  // Energy meter: accumulate kWh while incinerator is ON
+  if (state.s5.incOn) {
+    state.s5.kwh     = +(state.s5.kwh + 0.04).toFixed(2);
+    state.s5.runtime = state.s5.runtime + 1;
+  }
+  // Toggle incinerator OFF when primary treatment hits 100%, back ON for next batch
+  if (state.s5.pri >= 100) {
+    state.s5.incOn = false;
+    state.s5.pri   = 0;
+  }
+  if (!state.s5.incOn && tick % 20 === 0) {
+    state.s5.incOn   = true;
+    state.s5.runtime = 0;
+  }
+
+  // Simulate route arrival and new dispatch
+  if (state.s3.pct >= 98) {
+    state.s3.pct = 0;
+    state.s3.bags = Math.floor(Math.random()*20+30);
+    state.s4.r += Math.floor(state.s2.r * 0.3);
+    state.s4.y += Math.floor(state.s2.y * 0.3);
+    state.s4.b += Math.floor(state.s2.b * 0.3);
+    state.s4.w += Math.floor(state.s2.w * 0.3);
+    activityData.unshift({ color:'var(--green)', text:`VEH-002 arrived CBWTF — ${state.s3.bags} bags delivered`, time: timeStr });
+    activityData.splice(12);
+    buildActivity();
+    alertsData.push({ type:'ok', stage:'S3', msg:`VEH-002 arrived CBWTF — route complete`, time: timeStr });
+    buildAlerts();
+  }
+
+  render();
+}
+
+// Initial render
+render();
+buildAlerts();
+buildActivity();
+
+// Update every 2 seconds
+setInterval(simulateLive, 2000);
+</script>
+</body>
+</html>
